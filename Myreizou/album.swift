@@ -20,8 +20,13 @@ struct AlbumView: View {
 
 struct AlbumContentView: View {
     @Query(sort: \AlbumFolder.createdAt, order: .reverse) private var folders: [AlbumFolder]
+    @Query(sort: \AlbumPhoto.createdAt, order: .reverse) private var photos: [AlbumPhoto]
 
     @State private var isShowingAddFolder = false
+    @State private var displayMode: AlbumDisplayMode = .albums
+    @State private var selectedPhoto: AlbumPhoto?
+    @State private var folderSortOption: AlbumFolderSortOption = .updatedAt
+    @State private var photoSortOption: AlbumPhotoSortOption = .newest
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -30,29 +35,75 @@ struct AlbumContentView: View {
 
     var body: some View {
         ScrollView {
-            if folders.isEmpty {
-                ContentUnavailableView(
-                    "アルバムファイルがありません",
-                    systemImage: "folder.badge.plus",
-                    description: Text("右下の＋からファイルを作成できます。")
-                )
-                .padding(.top, 80)
-            } else {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(folders) { folder in
-                        NavigationLink {
-                            AlbumFolderDetailView(folder: folder)
-                        } label: {
-                            AlbumFolderGridItem(folder: folder)
-                        }
-                        .buttonStyle(.plain)
+            VStack(spacing: 16) {
+                Picker("表示", selection: $displayMode) {
+                    ForEach(AlbumDisplayMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
                 }
-                .padding()
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                switch displayMode {
+                case .albums:
+                    if sortedFolders.isEmpty {
+                        ContentUnavailableView(
+                            "アルバムファイルがありません",
+                            systemImage: "folder.badge.plus",
+                            description: Text("右下の＋からファイルを作成できます。")
+                        )
+                        .padding(.top, 64)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(sortedFolders) { folder in
+                                NavigationLink {
+                                    AlbumFolderDetailView(folder: folder)
+                                } label: {
+                                    AlbumFolderGridItem(folder: folder)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+
+                case .allPhotos:
+                    AllAlbumPhotosGrid(photos: sortedPhotos) { photo in
+                        selectedPhoto = photo
+                    }
+                }
             }
+            .padding(.top, 8)
+            .padding(.bottom, 96)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("アルバム")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    switch displayMode {
+                    case .albums:
+                        Picker("並び替え", selection: $folderSortOption) {
+                            ForEach(AlbumFolderSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.systemImage)
+                                    .tag(option)
+                            }
+                        }
+
+                    case .allPhotos:
+                        Picker("並び替え", selection: $photoSortOption) {
+                            ForEach(AlbumPhotoSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.systemImage)
+                                    .tag(option)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("並び替え")
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             AlbumFloatingAddButton(accessibilityLabel: "ファイルを作成") {
                 isShowingAddFolder = true
@@ -62,6 +113,131 @@ struct AlbumContentView: View {
         }
         .sheet(isPresented: $isShowingAddFolder) {
             AddAlbumFolderView()
+        }
+        .fullScreenCover(item: $selectedPhoto) { photo in
+            AlbumPhotoFullScreenView(photo: photo)
+        }
+    }
+
+    private var sortedFolders: [AlbumFolder] {
+        folders.sorted { first, second in
+            switch folderSortOption {
+            case .updatedAt:
+                return first.updatedAt > second.updatedAt
+            case .createdAt:
+                return first.createdAt > second.createdAt
+            case .name:
+                let result = first.name.compare(
+                    second.name,
+                    options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                    locale: Locale(identifier: "ja_JP")
+                )
+
+                if result != .orderedSame {
+                    return result == .orderedAscending
+                }
+
+                return first.updatedAt > second.updatedAt
+            case .photoCount:
+                if first.photos.count != second.photos.count {
+                    return first.photos.count > second.photos.count
+                }
+
+                return first.updatedAt > second.updatedAt
+            }
+        }
+    }
+
+    private var sortedPhotos: [AlbumPhoto] {
+        photos.sorted { first, second in
+            switch photoSortOption {
+            case .newest:
+                return first.createdAt > second.createdAt
+            case .oldest:
+                return first.createdAt < second.createdAt
+            }
+        }
+    }
+}
+
+private enum AlbumDisplayMode: String, CaseIterable, Identifiable {
+    case albums
+    case allPhotos
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .albums:
+            return "アルバム"
+        case .allPhotos:
+            return "すべての写真"
+        }
+    }
+}
+
+private enum AlbumFolderSortOption: String, CaseIterable, Identifiable {
+    case updatedAt
+    case createdAt
+    case name
+    case photoCount
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .updatedAt:
+            return "更新が新しい順"
+        case .createdAt:
+            return "作成が新しい順"
+        case .name:
+            return "名前順"
+        case .photoCount:
+            return "写真が多い順"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .updatedAt:
+            return "clock.arrow.circlepath"
+        case .createdAt:
+            return "calendar.badge.plus"
+        case .name:
+            return "textformat.abc"
+        case .photoCount:
+            return "photo.stack"
+        }
+    }
+}
+
+private enum AlbumPhotoSortOption: String, CaseIterable, Identifiable {
+    case newest
+    case oldest
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .newest:
+            return "新しい順"
+        case .oldest:
+            return "古い順"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .newest:
+            return "arrow.down"
+        case .oldest:
+            return "arrow.up"
         }
     }
 }
@@ -96,24 +272,20 @@ private struct AlbumFolderGridItem: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack {
-                if let coverPhoto = sortedPhotos.first {
-                    AlbumImage(data: coverPhoto.imageData)
-                        .aspectRatio(1, contentMode: .fill)
-                } else {
-                    ZStack {
-                        Rectangle()
-                            .fill(Color(.secondarySystemGroupedBackground))
+            if sortedPhotos.isEmpty {
+                ZStack {
+                    Rectangle()
+                        .fill(Color(.secondarySystemGroupedBackground))
 
-                        Image(systemName: "folder")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
-                    }
-                    .aspectRatio(1, contentMode: .fill)
+                    Image(systemName: "folder")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
                 }
+                .aspectRatio(1, contentMode: .fill)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                AlbumFolderPreviewGrid(photos: sortedPhotos)
             }
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
 
             Text(folder.name)
                 .font(.subheadline.weight(.semibold))
@@ -127,6 +299,69 @@ private struct AlbumFolderGridItem: View {
         .padding(8)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct AlbumFolderPreviewGrid: View {
+    let photos: [AlbumPhoto]
+
+    var body: some View {
+        GeometryReader { geometry in
+            let spacing: CGFloat = 2
+            let side = (geometry.size.width - spacing) / 2
+            let columns = [
+                GridItem(.fixed(side), spacing: spacing),
+                GridItem(.fixed(side), spacing: spacing)
+            ]
+
+            LazyVGrid(columns: columns, spacing: spacing) {
+                ForEach(0..<4, id: \.self) { index in
+                    if index < photos.count {
+                        AlbumImage(data: photos[index].imageData)
+                            .frame(width: side, height: side)
+                            .clipped()
+                    } else {
+                        Color(.secondarySystemGroupedBackground)
+                            .frame(width: side, height: side)
+                    }
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct AllAlbumPhotosGrid: View {
+    let photos: [AlbumPhoto]
+    let select: (AlbumPhoto) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+
+    var body: some View {
+        if photos.isEmpty {
+            ContentUnavailableView(
+                "写真がありません",
+                systemImage: "photo.on.rectangle",
+                description: Text("アルバムファイルに写真を追加すると表示されます。")
+            )
+            .padding(.top, 64)
+        } else {
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(photos) { photo in
+                    Button {
+                        select(photo)
+                    } label: {
+                        AlbumSquareThumbnail(data: photo.imageData, cornerRadius: 0)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
 
@@ -199,8 +434,8 @@ private struct AlbumFolderDetailView: View {
         .sheet(isPresented: $isShowingAddPhotos) {
             AddAlbumPhotosView(folder: folder)
         }
-        .sheet(item: $selectedPhoto) { photo in
-            AlbumPhotoDetailView(photo: photo)
+        .fullScreenCover(item: $selectedPhoto) { photo in
+            AlbumPhotoFullScreenView(photo: photo)
         }
         .confirmationDialog("このファイルを削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("削除", role: .destructive) {
@@ -243,13 +478,11 @@ private struct AlbumPhotoGridItem: View {
     let photo: AlbumPhoto
 
     var body: some View {
-        AlbumImage(data: photo.imageData)
-            .aspectRatio(1, contentMode: .fill)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        AlbumSquareThumbnail(data: photo.imageData)
     }
 }
 
-private struct AlbumPhotoDetailView: View {
+struct AlbumPhotoFullScreenView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -259,55 +492,57 @@ private struct AlbumPhotoDetailView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    AlbumImage(data: photo.imageData, contentMode: .fit)
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
 
-                    Label(photo.createdAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            AlbumImage(data: photo.imageData, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    if !photo.memo.isEmpty {
-                        Text(photo.memo)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding()
-            }
-            .navigationTitle("写真")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") {
+            VStack(spacing: 0) {
+                HStack {
+                    AlbumFullScreenButton(systemImage: "xmark") {
                         dismiss()
                     }
-                }
+                        .accessibilityLabel("閉じる")
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .destructive) {
+                    Spacer()
+
+                    AlbumFullScreenButton(systemImage: "trash") {
                         isShowingDeleteConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
                     }
                     .accessibilityLabel("写真を削除")
                 }
-            }
-            .confirmationDialog("この写真を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
-                Button("削除", role: .destructive) {
-                    deletePhoto()
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+
+                Spacer()
+
+                if !photo.memo.isEmpty {
+                    Text(photo.memo)
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 28)
                 }
             }
-            .alert("削除できませんでした", isPresented: errorBinding) {
-                Button("OK", role: .cancel) {
-                    errorMessage = nil
-                }
-            } message: {
-                Text(errorMessage ?? "")
+        }
+        .confirmationDialog("この写真を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
+            Button("削除", role: .destructive) {
+                deletePhoto()
             }
+        }
+        .alert("削除できませんでした", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
 
@@ -335,6 +570,23 @@ private struct AlbumPhotoDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct AlbumFullScreenButton: View {
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -554,6 +806,21 @@ private struct AddAlbumPhotosView: View {
     }
 }
 
+struct AlbumSquareThumbnail: View {
+    let data: Data
+    var cornerRadius: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { geometry in
+            AlbumImage(data: data)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
 private struct AlbumImage: View {
     let data: Data
     var contentMode: ContentMode = .fill
@@ -602,7 +869,7 @@ typealias album = AlbumView
 #Preview {
     AlbumView()
         .modelContainer(
-            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self],
+            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self, CalendarEvent.self, BudgetSettings.self, BudgetItem.self],
             inMemory: true
         )
 }

@@ -14,6 +14,17 @@ struct MyreizouApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self])
+        .modelContainer(
+            for: [
+                FoodItem.self,
+                FoodCategory.self,
+                AlbumEntry.self,
+                AlbumFolder.self,
+                AlbumPhoto.self,
+                CalendarEvent.self,
+                BudgetSettings.self,
+                BudgetItem.self
+            ]
+        )
     }
 }

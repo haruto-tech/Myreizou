@@ -840,7 +840,7 @@ typealias foodlist = FoodListView
 #Preview {
     FoodListView()
         .modelContainer(
-            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self],
+            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self, CalendarEvent.self, BudgetSettings.self, BudgetItem.self],
             inMemory: true
         )
 }

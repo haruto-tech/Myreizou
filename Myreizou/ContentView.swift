@@ -20,11 +20,14 @@ struct ContentView: View {
             Tab("食材リスト",systemImage: "refrigerator"){
                 foodlist()
             }
-            Tab("食材検索",systemImage: "magnifyingglass"){
-                foodsearch()
+            Tab("予算", systemImage: "yensign.circle") {
+                budget()
             }
             Tab("アルバム",systemImage: "photo.on.rectangle"){
                 album()
+            }
+            Tab("カレンダー", systemImage: "calendar") {
+                AppCalendarView()
             }
         }
         .task {
@@ -54,7 +57,7 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .modelContainer(
-            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self],
+            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self, CalendarEvent.self, BudgetSettings.self, BudgetItem.self],
             inMemory: true
         )
 }

@@ -11,14 +11,11 @@ import SwiftData
 struct home1: View {
     @Query(sort: \FoodItem.createdAt, order: .reverse) private var foods: [FoodItem]
 
-    @State private var isShowingAddFood = false
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     statusPanel
-                    shortcutSection
                     expiringFoodSection
                     recipeSection
                 }
@@ -26,9 +23,6 @@ struct home1: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("ホーム")
-            .sheet(isPresented: $isShowingAddFood) {
-                AddFoodView()
-            }
         }
     }
 
@@ -61,46 +55,6 @@ struct home1: View {
         .padding()
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var shortcutSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("基本機能")
-                .font(.headline)
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                Button {
-                    isShowingAddFood = true
-                } label: {
-                    HomeShortcutCard(
-                        title: "食材を追加",
-                        systemImage: "plus.circle.fill",
-                        tint: .green
-                    )
-                }
-
-                NavigationLink {
-                    FoodListContentView()
-                } label: {
-                    HomeShortcutCard(
-                        title: "食材リスト",
-                        systemImage: "list.bullet.rectangle.fill",
-                        tint: .blue
-                    )
-                }
-
-                NavigationLink {
-                    AlbumContentView()
-                } label: {
-                    HomeShortcutCard(
-                        title: "アルバム",
-                        systemImage: "photo.on.rectangle.fill",
-                        tint: .orange
-                    )
-                }
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     private var expiringFoodSection: some View {
@@ -202,30 +156,6 @@ struct home1: View {
         let today = calendar.startOfDay(for: Date())
         let targetDate = calendar.startOfDay(for: date)
         return calendar.dateComponents([.day], from: today, to: targetDate).day ?? 0
-    }
-}
-
-private struct HomeShortcutCard: View {
-    let title: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(tint)
-
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding()
-        .frame(minHeight: 104)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -479,7 +409,7 @@ private struct RecipeSuggestion: Identifiable {
 #Preview {
     home1()
         .modelContainer(
-            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self],
+            for: [FoodItem.self, FoodCategory.self, AlbumEntry.self, AlbumFolder.self, AlbumPhoto.self, CalendarEvent.self, BudgetSettings.self, BudgetItem.self],
             inMemory: true
         )
 }
